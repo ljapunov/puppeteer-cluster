@@ -1,4 +1,5 @@
 
+import { LaunchOptions } from 'puppeteer';
 import { URL } from 'url';
 import { TaskFunction } from './Cluster';
 
@@ -14,18 +15,23 @@ export default class Job<JobData, ReturnData> {
     public data?: JobData;
     public taskFunction: TaskFunction<JobData, ReturnData> | undefined;
     public executeCallbacks: ExecuteCallbacks | undefined;
+    public launchOptions?: LaunchOptions;
 
     private lastError: Error | null = null;
     public tries: number = 0;
+
+
 
     public constructor(
         data?: JobData,
         taskFunction?: TaskFunction<JobData, ReturnData>,
         executeCallbacks?: ExecuteCallbacks,
+        launchOptions?: LaunchOptions,
     ) {
         this.data = data;
         this.taskFunction = taskFunction;
         this.executeCallbacks = executeCallbacks;
+        this.launchOptions = launchOptions;
     }
 
     public getUrl(): string | undefined {

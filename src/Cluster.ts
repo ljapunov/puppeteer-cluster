@@ -177,14 +177,16 @@ export default class Cluster<JobData = any, ReturnData = any> extends EventEmitt
         this.checkForWorkInterval = setInterval(() => this.work(), CHECK_FOR_WORK_INTERVAL);
     }
 
-    private async launchWorker() {
+    private async launchWorker(launchOptions?: LaunchOptions) {
         // signal, that we are starting a worker
         this.workersStarting += 1;
         this.nextWorkerId += 1;
         this.lastLaunchedWorkerTime = Date.now();
 
         let nextWorkerOption;
-        if (this.perBrowserOptions && this.perBrowserOptions.length > 0) {
+        if(launchOptions) {
+            nextWorkerOption = launchOptions;
+        } else if (this.perBrowserOptions && this.perBrowserOptions.length > 0) {
             nextWorkerOption = this.perBrowserOptions.shift();
         }
 
@@ -253,20 +255,21 @@ export default class Cluster<JobData = any, ReturnData = any> extends EventEmitt
             return;
         }
 
-        if (this.workersAvail.length === 0) { // no workers available
-            if (this.allowedToStartWorker()) {
-                await this.launchWorker();
-                this.work();
-            }
-            return;
-        }
-
         const job = this.jobQueue.shift();
 
         if (job === undefined) {
             // skip, there are items in the queue but they are all delayed
             return;
         }
+
+        if (this.workersAvail.length === 0) { // no workers available
+            if (this.allowedToStartWorker()) {
+                await this.launchWorker(job.launchOptions);
+                this.work();
+            }
+            return;
+        }
+
 
         const url = job.getUrl();
         const domain = job.getDomain();
@@ -387,6 +390,7 @@ export default class Cluster<JobData = any, ReturnData = any> extends EventEmitt
         data: JobData | TaskFunction<JobData, ReturnData>,
         taskFunction?: TaskFunction<JobData, ReturnData>,
         callbacks?: ExecuteCallbacks,
+        launchOptions?: LaunchOptions,
     ): void {
         let realData: JobData | undefined;
         let realFunction: TaskFunction<JobData, ReturnData> | undefined;
@@ -396,7 +400,7 @@ export default class Cluster<JobData = any, ReturnData = any> extends EventEmitt
             realData = data;
             realFunction = taskFunction;
         }
-        const job = new Job<JobData, ReturnData>(realData, realFunction, callbacks);
+        const job = new Job<JobData, ReturnData>(realData, realFunction, callbacks, launchOptions);
 
         this.allTargetCount += 1;
         this.jobQueue.push(job);
@@ -428,10 +432,16 @@ export default class Cluster<JobData = any, ReturnData = any> extends EventEmitt
     public execute(
         data: JobData | TaskFunction<JobData, ReturnData>,
         taskFunction?: TaskFunction<JobData, ReturnData>,
-    ): Promise<ReturnData> {
+    ): Promise<ReturnData>;
+    public execute(
+        data: JobData | TaskFunction<JobData, ReturnData>,
+        taskFunction?: TaskFunction<JobData, ReturnData>,
+        launchOptions?: LaunchOptions,
+    ): Promise<ReturnData>
+    {
         return new Promise<ReturnData>((resolve: ExecuteResolve, reject: ExecuteReject) => {
             const callbacks = { resolve, reject };
-            this.queueJob(data, taskFunction, callbacks);
+            this.queueJob(data, taskFunction, callbacks, launchOptions);
         });
     }
 
